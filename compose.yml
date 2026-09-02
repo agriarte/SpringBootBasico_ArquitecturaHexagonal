@@ -1,0 +1,31 @@
+services:
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: codeja-postgres
+
+    environment:
+      POSTGRES_DB: empleados
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+
+    ports:
+      - "5432:5432"
+
+    volumes:
+      - codeja_postgres_data:/var/lib/postgresql/data
+
+
+  app:
+    build: .
+    container_name: codeja-springboot
+
+    ports:
+      - "8080:8080"
+
+    depends_on:
+      - postgres
+
+
+volumes:
+  codeja_postgres_data:

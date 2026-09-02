@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+
+<head>
+
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>Nuevo empleado</title>
+
+    <!-- Bootstrap proporciona los estilos y componentes visuales. -->
+    <link
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+        rel="stylesheet">
+
+</head>
+
+<body class="bg-light">
+
+    <div class="container mt-5">
+
+        <div class="card shadow">
+
+            <div class="card-header">
+                <h2 class="mb-0">Nuevo empleado</h2>
+            </div>
+
+            <div class="card-body">
+
+
+                <!--
+                 * Mensaje mostrado después de crear correctamente
+                 * el empleado.
+                 *
+                 * d-none lo mantiene oculto inicialmente.
+                 -->
+                <div id="mensajeExito"
+                     class="alert alert-success d-none"
+                     role="alert">
+
+                    <h5 class="alert-heading">
+                        Empleado añadido correctamente.
+                    </h5>
+
+                    <p>
+                        El empleado se ha añadido a la lista.
+                    </p>
+
+                    <button type="button"
+                            class="btn btn-primary"
+                            onclick="crearOtro()">
+                        Crear otro
+                    </button>
+
+                    <a href="/web/empleados"
+                       class="btn btn-success">
+                        Ver empleados
+                    </a>
+
+                </div>
+
+
+                <form id="formEmpleado">
+
+                    <!--
+                     * El ID no se solicita al usuario.
+                     *
+                     * H2 genera automáticamente el identificador
+                     * mediante @GeneratedValue en la Entity Empleado.
+                     -->
+                    <div class="mb-3">
+
+                        <label for="nombre"
+                               class="form-label">
+                            Nombre
+                        </label>
+
+                        <input type="text"
+                               id="nombre"
+                               class="form-control"
+                               required>
+
+                    </div>
+
+
+                    <button type="submit"
+                            class="btn btn-primary">
+                        Crear empleado
+                    </button>
+
+                    <a href="/web/empleados"
+                       class="btn btn-secondary">
+                        Cancelar
+                    </a>
+
+                </form>
+
+            </div>
+
+        </div>
+
+    </div>
+
+
+    <script>
+
+        /*
+         * ============================================================
+         * Envío del formulario
+         * ============================================================
+         *
+         * Detecta el evento submit del formulario.
+         *
+         * En lugar de realizar el envío HTML tradicional,
+         * JavaScript realizará la petición mediante fetch().
+         */
+        document
+            .getElementById("formEmpleado")
+            .addEventListener("submit", function(event) {
+
+                /*
+                 * Evita el comportamiento tradicional del formulario,
+                 * que provocaría una recarga/navegación.
+                 */
+                event.preventDefault();
+
+
+                /*
+                 * Construimos el objeto JavaScript con los datos
+                 * introducidos por el usuario.
+                 *
+                 * El ID no se incluye porque H2 lo genera
+                 * automáticamente al guardar la Entity.
+                 */
+                const empleado = {
+
+                    nombre:
+                        document.getElementById("nombre").value
+
+                };
+
+
+                /*
+                 * ====================================================
+                 * POST /empleados
+                 * ====================================================
+                 *
+                 * fetch() realiza la petición HTTP contra nuestra
+                 * API REST.
+                 *
+                 * El cuerpo de la petición contiene el empleado
+                 * en formato JSON.
+                 */
+                fetch("/empleados", {
+
+                    method: "POST",
+
+                    /*
+                     * Indicamos que el cuerpo de la petición
+                     * contiene datos en formato JSON.
+                     */
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
+                    /*
+                     * JSON.stringify() convierte el objeto JavaScript
+                     * en una cadena JSON.
+                     *
+                     * Ejemplo:
+                     *
+                     * {
+                     *     "nombre": "Pedro"
+                     * }
+                     */
+                    body: JSON.stringify(empleado)
+
+                })
+
+
+                /*
+                 * Procesamos la respuesta HTTP recibida de Spring Boot.
+                 */
+                .then(response => {
+
+                    /*
+                     * response.ok es true cuando el servidor devuelve
+                     * un código HTTP entre 200 y 299.
+                     *
+                     * En nuestro caso esperamos:
+                     *
+                     * 201 CREATED
+                     */
+                    if (!response.ok) {
+
+                        throw new Error(
+                            "Error al crear el empleado"
+                        );
+                    }
+
+                    /*
+                     * El Controller REST devuelve el EmpleadoDTO
+                     * creado en formato JSON.
+                     *
+                     * response.json() convierte ese JSON en
+                     * un objeto JavaScript.
+                     */
+                    return response.json();
+
+                })
+
+
+                /*
+                 * No necesitamos utilizar el objeto recibido.
+                 *
+                 * Solo necesitamos saber que el empleado se creó
+                 * correctamente para actualizar la interfaz.
+                 */
+                .then(() => {
+
+                    /*
+                     * Oculta el formulario.
+                     */
+                    document
+                        .getElementById("formEmpleado")
+                        .classList.add("d-none");
+
+                    /*
+                     * Muestra el mensaje de confirmación.
+                     */
+                    document
+                        .getElementById("mensajeExito")
+                        .classList.remove("d-none");
+
+                })
+
+
+                /*
+                 * Captura los errores producidos durante el proceso.
+                 */
+                .catch(error => {
+
+                    console.error(error);
+
+                });
+
+            });
+
+
+        /*
+         * ============================================================
+         * Crear otro empleado
+         * ============================================================
+         *
+         * Permite volver a utilizar el mismo formulario después
+         * de haber creado correctamente un empleado.
+         */
+        function crearOtro() {
+
+            /*
+             * Borra los valores introducidos anteriormente.
+             */
+            document
+                .getElementById("formEmpleado")
+                .reset();
+
+            /*
+             * Oculta el mensaje de éxito.
+             */
+            document
+                .getElementById("mensajeExito")
+                .classList.add("d-none");
+
+            /*
+             * Vuelve a mostrar el formulario.
+             */
+            document
+                .getElementById("formEmpleado")
+                .classList.remove("d-none");
+        }
+
+    </script>
+
+</body>
+
+</html>
