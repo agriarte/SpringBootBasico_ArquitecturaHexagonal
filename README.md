@@ -184,3 +184,150 @@ Por tanto, la arquitectura hexagonal aporta valor principalmente cuando se neces
 2. Si es un puerto de entrada, implementa la lógica en el **servicio de aplicación**.
 3. Si es un puerto de salida, crea o modifica el **adapter** para conectar ese contrato con la tecnología externa correspondiente.
 4. Los componentes externos deben depender de los **puertos (interfaces)** y no de las implementaciones concretas.
+
+## Formas de uso
+
+El proyecto utiliza Docker Compose para ejecutar PostgreSQL y la aplicación.
+
+### 1. Ejecutar todo con Docker Compose
+
+Para levantar PostgreSQL y la aplicación Spring Boot en contenedores:
+
+```bash
+docker compose up -d
+```
+
+La aplicación estará disponible en:
+
+```text
+http://localhost:8080
+```
+
+### 2. Ejecutar la aplicación desde Eclipse u otro IDE
+
+Si estamos modificando y probando rápidamente el código desde Eclipse, no es necesario ejecutar también la aplicación dentro de Docker.
+
+Podemos levantar únicamente el contenedor de PostgreSQL:
+
+```bash
+docker compose up -d postgres
+```
+
+A continuación, ejecutamos `RestApplication` directamente desde Eclipse (o desde el IDE utilizado).
+
+La aplicación Spring Boot se ejecutará en:
+
+```text
+http://localhost:8080
+```
+
+## Endpoints REST
+
+La API REST se puede probar mediante Postman.
+
+**Obtener todos los empleados**
+
+```http
+GET http://localhost:8080/empleados
+```
+
+**Obtener un empleado por ID**
+
+```http
+GET http://localhost:8080/empleados/{id}
+```
+
+Ejemplo:
+
+```http
+GET http://localhost:8080/empleados/3
+```
+
+**Crear un empleado**
+
+```http
+POST http://localhost:8080/empleados
+```
+
+Body → `raw` → `JSON`:
+
+```json
+{
+    "nombre": "Nuevo empleado"
+}
+```
+
+**Modificar un empleado**
+
+```http
+PUT http://localhost:8080/empleados/{id}
+```
+
+Ejemplo:
+
+```http
+PUT http://localhost:8080/empleados/3
+```
+
+Body → `raw` → `JSON`:
+
+```json
+{
+    "nombre": "Nombre modificado"
+}
+```
+
+**Eliminar un empleado**
+
+```http
+DELETE http://localhost:8080/empleados/{id}
+```
+
+Ejemplo:
+
+```http
+DELETE http://localhost:8080/empleados/3
+```
+
+**Endpoint de prueba**
+
+Para comprobar rápidamente que el Controller REST está funcionando:
+
+```http
+GET http://localhost:8080/empleados/test
+```
+
+Devuelve un empleado de prueba en formato JSON.
+
+## Interfaz web con Thymeleaf
+
+Además de la API REST, el proyecto incluye una interfaz web basada en Thymeleaf.
+
+Se puede acceder desde el navegador mediante:
+
+```text
+http://localhost:8080/web/empleados
+```
+
+Esta interfaz permite visualizar los empleados y acceder a las vistas relacionadas con su gestión.
+
+Por tanto, el proyecto dispone de dos formas de acceso a la aplicación:
+
+```text
+API REST
+    ↓
+/empleados
+    ↓
+JSON
+    ↓
+Postman / aplicaciones cliente
+
+
+Interfaz Web
+    ↓
+/web/empleados
+    ↓
+HTML + Thymeleaf
+    ↓
+Navegador
+```
