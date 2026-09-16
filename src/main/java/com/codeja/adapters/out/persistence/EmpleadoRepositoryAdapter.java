@@ -3,6 +3,7 @@ package com.codeja.adapters.out.persistence;
 import java.util.List;
 import java.util.Optional;
 
+import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Repository;
 
 import com.codeja.application.ports.out.EmpleadoRepository;
@@ -58,6 +59,7 @@ import com.codeja.domain.Empleado;
  */
 
 @Repository
+@Primary
 public class EmpleadoRepositoryAdapter implements EmpleadoRepository {
 
 
