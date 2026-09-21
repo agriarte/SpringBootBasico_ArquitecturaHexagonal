@@ -1,9 +1,11 @@
 <!DOCTYPE html>
+
 <html lang="es" xmlns:th="http://www.thymeleaf.org">
 
 <head>
 
     <meta charset="UTF-8">
+
     <meta name="viewport"
           content="width=device-width, initial-scale=1">
 
@@ -23,7 +25,9 @@
         <div class="card shadow">
 
             <div class="card-header">
+
                 <h2 class="mb-0">Editar empleado</h2>
+
             </div>
 
             <div class="card-body">
@@ -81,8 +85,11 @@
 
                     <button type="submit"
                             class="btn btn-primary">
+
                         Guardar cambios
+
                     </button>
+
 
                     <!--
                      * No modifica ningún dato.
@@ -93,7 +100,9 @@
                      -->
                     <a href="/web/empleados"
                        class="btn btn-secondary">
+
                         Cancelar
+
                     </a>
 
                 </form>
@@ -122,7 +131,9 @@
                     <a
                         href="/web/empleados"
                         class="btn btn-success mt-3">
+
                         Ver empleados
+
                     </a>
 
                 </div>
@@ -138,6 +149,45 @@
 
         /*
          * ============================================================
+         * OBTENER TOKEN CSRF
+         * ============================================================
+         *
+         * Solicita a Spring Security el token necesario para
+         * realizar peticiones que modifican datos.
+         *
+         * El endpoint /csrf devuelve un JSON con:
+         *
+         *     headerName
+         *     parameterName
+         *     token
+         *
+         * En nuestro caso utilizaremos headerName y token
+         * para construir la cabecera de la petición PUT.
+         */
+        async function obtenerCsrf() {
+
+            const response = await fetch("/csrf");
+
+            /*
+             * Comprobamos que la petición para obtener el token
+             * se haya realizado correctamente.
+             */
+            if (!response.ok) {
+
+                throw new Error(
+                    "No se pudo obtener el token CSRF"
+                );
+            }
+
+            /*
+             * Convertimos la respuesta JSON en un objeto JavaScript.
+             */
+            return response.json();
+        }
+
+
+        /*
+         * ============================================================
          * Envío del formulario
          * ============================================================
          *
@@ -148,7 +198,7 @@
          */
         document
             .getElementById("formEditarEmpleado")
-            .addEventListener("submit", function(event) {
+            .addEventListener("submit", async function(event) {
 
                 /*
                  * Evita el comportamiento tradicional del formulario,
@@ -159,73 +209,105 @@
                 event.preventDefault();
 
 
-                /*
-                 * Obtiene el ID del empleado desde el campo del formulario.
-                 *
-                 * Number() convierte el valor recibido del HTML
-                 * (que es texto) en un número.
-                 *
-                 * Este ID identifica qué empleado será modificado.
-                 */
-                const id = Number(
-                    document.getElementById("id").value
-                );
-
-
-                /*
-                 * Construye el objeto JavaScript que se enviará
-                 * al endpoint REST.
-                 *
-                 * El ID se mantiene porque identifica el empleado.
-                 * El nombre contiene el nuevo valor introducido
-                 * por el usuario.
-                 */
-                const empleado = {
-
-                    id: id,
-
-                    nombre:
-                        document.getElementById("nombre").value
-                };
-
-
-                /*
-                 * ====================================================
-                 * PUT /empleados/{id}
-                 * ====================================================
-                 *
-                 * fetch() realiza la petición HTTP contra nuestra API REST.
-                 *
-                 * Ejemplo:
-                 *
-                 * PUT /empleados/3
-                 *
-                 * El objeto "empleado" se convierte a JSON y se
-                 * envía en el cuerpo de la petición.
-                 */
-                fetch("/empleados/" + id, {
-
-                    method: "PUT",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
+                try {
 
                     /*
-                     * JSON.stringify() convierte el objeto JavaScript
-                     * en una cadena JSON.
+                     * ==================================================
+                     * OBTENER TOKEN CSRF
+                     * ==================================================
+                     *
+                     * Antes del PUT obtenemos el token que Spring
+                     * Security exige para las peticiones que modifican
+                     * datos.
                      */
-                    body: JSON.stringify(empleado)
+                    const csrf = await obtenerCsrf();
 
-                })
-
-
-                /*
-                 * Procesamos la respuesta HTTP recibida de Spring Boot.
-                 */
-                .then(response => {
 
                     /*
+                     * Obtiene el ID del empleado desde el campo
+                     * del formulario.
+                     *
+                     * Number() convierte el valor recibido del HTML
+                     * (que es texto) en un número.
+                     *
+                     * Este ID identifica qué empleado será modificado.
+                     */
+                    const id = Number(
+                        document.getElementById("id").value
+                    );
+
+
+                    /*
+                     * Construye el objeto JavaScript que se enviará
+                     * al endpoint REST.
+                     *
+                     * El ID se mantiene porque identifica el empleado.
+                     *
+                     * El nombre contiene el nuevo valor introducido
+                     * por el usuario.
+                     */
+                    const empleado = {
+
+                        id: id,
+
+                        nombre:
+                            document.getElementById("nombre").value
+
+                    };
+
+
+                    /*
+                     * ==================================================
+                     * PUT /empleados/{id}
+                     * ==================================================
+                     *
+                     * fetch() realiza la petición HTTP contra nuestra
+                     * API REST.
+                     *
+                     * Ejemplo:
+                     *
+                     * PUT /empleados/3
+                     *
+                     * El objeto "empleado" se convierte a JSON y se
+                     * envía en el cuerpo de la petición.
+                     */
+                    const response = await fetch(
+                        "/empleados/" + id,
+                        {
+
+                            method: "PUT",
+
+                            headers: {
+
+                                /*
+                                 * Indicamos que el cuerpo de la petición
+                                 * contiene datos en formato JSON.
+                                 */
+                                "Content-Type": "application/json",
+
+                                /*
+                                 * Enviamos el token CSRF en la cabecera
+                                 * indicada por Spring Security.
+                                 */
+                                [csrf.headerName]: csrf.token
+
+                            },
+
+                            /*
+                             * JSON.stringify() convierte el objeto
+                             * JavaScript en una cadena JSON.
+                             */
+                            body: JSON.stringify(empleado)
+
+                        }
+                    );
+
+
+                    /*
+                     * ==================================================
+                     * PROCESAR RESPUESTA
+                     * ==================================================
+                     *
                      * response.ok es true cuando el servidor responde
                      * con un código HTTP entre 200 y 299.
                      */
@@ -236,31 +318,29 @@
                         );
                     }
 
+
                     /*
                      * El Controller REST devuelve el EmpleadoDTO
                      * modificado en formato JSON.
                      *
-                     * Lo convertimos en un objeto JavaScript.
+                     * No necesitamos utilizarlo.
+                     *
+                     * Lo leemos para consumir correctamente la respuesta.
                      */
-                    return response.json();
+                    await response.json();
 
-                })
-
-
-                /*
-                 * La respuesta JSON no la necesitamos en este momento.
-                 *
-                 * Solo necesitamos saber que la modificación ha sido
-                 * realizada correctamente.
-                 */
-                .then(() => {
 
                     /*
+                     * ==================================================
+                     * MOSTRAR CONFIRMACIÓN
+                     * ==================================================
+                     *
                      * Oculta el formulario.
                      */
                     document
                         .getElementById("formEditarEmpleado")
                         .classList.add("d-none");
+
 
                     /*
                      * Muestra el mensaje de confirmación.
@@ -269,17 +349,15 @@
                         .getElementById("mensajeExito")
                         .classList.remove("d-none");
 
-                })
 
+                } catch (error) {
 
-                /*
-                 * Captura los errores producidos durante el proceso.
-                 */
-                .catch(error => {
-
+                    /*
+                     * Captura los errores producidos durante el proceso.
+                     */
                     console.error(error);
 
-                });
+                }
 
             });
 

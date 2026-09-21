@@ -20,6 +20,8 @@ La aplicación estará disponible en `http://localhost:8080` y la interfaz web e
 
 Si prefieres ejecutar Spring Boot desde Eclipse en vez de Docker, o usar H2 en memoria en lugar de PostgreSQL, consulta la sección [Formas de uso](#formas-de-uso).
 
+Para probar la API REST con Postman (requiere autenticación y token CSRF), consulta [Probar la API con Postman](#probar-la-api-con-postman).
+
 ---
 
 ## Diagrama de la arquitectura
@@ -84,6 +86,8 @@ src/main/java/com.codeja
 │
 └── adapters
     ├── in
+    │   ├── security
+    │   │   └── SecurityConfig.java
     │   └── web
     │       ├── EmpleadosControlador.java
     │       └── EmpleadosWebController.java
@@ -101,7 +105,7 @@ src/main/java/com.codeja
 |---|---|
 | `domain` | Modelo de dominio |
 | `application` | Casos de uso y contratos |
-| `adapters/in` | Entrada de peticiones externas |
+| `adapters/in` | Entrada de peticiones externas (y su seguridad) |
 | `adapters/out` | Comunicación con sistemas externos |
 | `RestApplication` | Punto de entrada de Spring Boot |
 
@@ -423,22 +427,165 @@ o
 
 ## API REST
 
-La API REST se puede probar mediante Postman.
+La API REST requiere autenticación (ver [Seguridad](#seguridad)) y se puede probar mediante Postman (ver [Probar la API con Postman](#probar-la-api-con-postman)).
 
-| Acción | Método y ruta | Body |
-|---|---|---|
-| Listar empleados | `GET /empleados` | — |
-| Obtener por ID | `GET /empleados/{id}` | — |
-| Crear empleado | `POST /empleados` | `{ "nombre": "Nuevo empleado" }` |
-| Modificar empleado | `PUT /empleados/{id}` | `{ "nombre": "Nombre modificado" }` |
-| Eliminar empleado | `DELETE /empleados/{id}` | — |
-| Endpoint de prueba | `GET /empleados/test` | Devuelve un empleado de prueba en JSON |
+| Acción | Método y ruta | Body | Acceso |
+|---|---|---|---|
+| Listar empleados | `GET /empleados` | — | `USER` o `ADMIN` |
+| Obtener por ID | `GET /empleados/{id}` | — | `USER` o `ADMIN` |
+| Crear empleado | `POST /empleados` | `{ "nombre": "Nuevo empleado" }` | Solo `ADMIN` |
+| Modificar empleado | `PUT /empleados/{id}` | `{ "nombre": "Nombre modificado" }` | Solo `ADMIN` |
+| Eliminar empleado | `DELETE /empleados/{id}` | — | Solo `ADMIN` |
+| Endpoint de prueba | `GET /empleados/test` | Devuelve un empleado de prueba en JSON | `USER` o `ADMIN` |
+| Token CSRF | `GET /csrf` | Devuelve el token CSRF en JSON | Público |
 
 Ejemplo:
 
 ```http
 GET http://localhost:8080/empleados/3
 ```
+
+---
+
+## Seguridad
+
+La seguridad se configura con Spring Security en `adapters/in/security/SecurityConfig.java`.
+
+| Elemento | Configuración |
+|---|---|
+| Usuarios | En memoria (no se guardan en la base de datos) |
+| Contraseñas | Codificadas con BCrypt |
+| Interfaz web (`/web/**`) | Login por formulario en `/login` |
+| API REST (`/empleados/**`) | Basic Auth (`httpBasic`) |
+| CSRF | Activo. Obligatorio en `POST`, `PUT` y `DELETE` |
+
+### Usuarios de demostración
+
+| Usuario | Contraseña | Rol | Permisos |
+|---|---|---|---|
+| `user` | `password` | `USER` | Solo consultar (`GET`) |
+| `admin` | `admin` | `ADMIN` | Consultar, crear, modificar y eliminar |
+
+> Estos usuarios son solo para uso didáctico. En un entorno real las credenciales no deben estar en el código.
+
+### Qué responde la aplicación según el cliente
+
+Con `formLogin` y `httpBasic` activos a la vez, Spring Security responde de forma distinta a una petición sin autenticar:
+
+| Cliente | Respuesta |
+|---|---|
+| Navegador (`Accept: text/html`) | Redirige al formulario `/login` |
+| Postman u otro cliente REST | `401 Unauthorized` |
+
+Por eso, si en Postman aparece la pantalla de login (HTML) en lugar de JSON, significa que la petición no se está autenticando.
+
+---
+
+## Probar la API con Postman
+
+Con CSRF activado, cada petición `POST`, `PUT` o `DELETE` necesita **tres cosas a la vez**. Las peticiones `GET` solo necesitan la primera.
+
+| Qué | Para qué | Cómo se envía |
+|---|---|---|
+| **Credenciales** | Saber quién eres | Basic Auth (`admin` / `admin`) |
+| **Sesión** | Spring guarda ahí el token CSRF y lo compara | Cookie `JSESSIONID` (Postman la guarda solo) |
+| **Token CSRF** | Demostrar que la petición es legítima | Cabecera `X-CSRF-TOKEN` |
+
+El token está ligado a la sesión: debe obtenerse **desde Postman** (con `GET /csrf`) y usarse con la misma cookie. Un token copiado del navegador no sirve.
+
+### Opción A: configuración automática con una colección (recomendada)
+
+Se configura una sola vez y después el token se pide y se envía solo.
+
+**1. Crear la colección**
+
+En el panel izquierdo, `Collections` → `+` → *New collection*, con el nombre `Empleados`. Guarda dentro todas las peticiones.
+
+**2. Configurar la autenticación en la colección**
+
+Haz clic en el **nombre de la colección** → pestaña **Authorization**:
+
+- Auth type: `Basic Auth`
+- Username: `admin`
+- Password: `admin`
+
+En **cada petición** de la colección, pestaña **Authorization** → Auth type: **Inherit auth from parent**. Debe aparecer *Basic Auth* con la etiqueta *Inherited*.
+
+**3. Añadir el script que pide el token**
+
+Haz clic en el nombre de la colección → pestaña **Scripts** → **Before request** (en versiones antiguas de Postman se llama *Pre-request Script*) y pega:
+
+```javascript
+pm.sendRequest({
+    url: "http://localhost:8080/csrf",
+    method: "GET",
+    header: { Authorization: "Basic " + btoa("admin:admin") }
+}, (err, res) => {
+    if (!err) {
+        pm.collectionVariables.set("csrfToken", res.json().token);
+    }
+});
+```
+
+Guarda con `Ctrl+S`. Si tu aplicación no usa el puerto 8080, cambia la URL.
+
+Este script se ejecuta antes de cada petición de la colección y guarda un token nuevo en la variable `csrfToken`.
+
+**4. Añadir la cabecera en `POST`, `PUT` y `DELETE`**
+
+En cada una de esas peticiones, pestaña **Headers**, nueva fila:
+
+| Key | Value |
+|---|---|
+| `X-CSRF-TOKEN` | `{{csrfToken}}` |
+
+Comprueba que la casilla de la fila está marcada. Las peticiones `GET` no necesitan esta cabecera.
+
+**5. Configurar el body en `POST` y `PUT`**
+
+Pestaña **Body** → **raw** → tipo **JSON**, con **un solo objeto** (sin corchetes):
+
+```json
+{
+    "nombre": "Pepe Fon"
+}
+```
+
+No incluyas `id` en el `POST` si lo genera la base de datos.
+
+### Peticiones de ejemplo
+
+| Petición | Authorization | Cabecera `X-CSRF-TOKEN` | Body | Respuesta esperada |
+|---|---|---|---|---|
+| `GET /empleados` | Heredada | No | — | `200` con el JSON |
+| `GET /empleados/{id}` | Heredada | No | — | `200` (o `404` si no existe) |
+| `POST /empleados` | Heredada | Sí | JSON | `201` o `200` |
+| `PUT /empleados/{id}` | Heredada | Sí | JSON | `200` o `204` |
+| `DELETE /empleados/{id}` | Heredada | Sí | — | `204 No Content` |
+
+### Opción B: método manual (sin script)
+
+Útil para depurar o si el script no funciona.
+
+1. **`GET /csrf`** con Basic Auth `admin` / `admin`. Copia el valor del campo `token` de la respuesta.
+2. Comprueba que Postman guardó la cookie: botón **Cookies** (bajo el botón Send) → dominio `localhost` → debe aparecer `JSESSIONID`.
+3. En la petición `POST`, `PUT` o `DELETE`:
+   - Authorization: Basic Auth `admin` / `admin`
+   - Headers: `X-CSRF-TOKEN` = el token copiado
+   - No borres las cookies entre las dos peticiones.
+
+### Errores frecuentes
+
+| Síntoma | Causa probable | Solución |
+|---|---|---|
+| `200` con HTML ("Please sign in") | La petición no está autenticada y Spring redirige a `/login` | Configurar Basic Auth en la petición o heredarlo de la colección |
+| `401 Unauthorized` | Faltan credenciales o son incorrectas | Revisar usuario y contraseña en Authorization |
+| `403 Forbidden` en `POST`, `PUT` o `DELETE` | Falta el token CSRF, o el token no corresponde a la sesión | Enviar `X-CSRF-TOKEN` obtenido desde Postman y mantener la cookie `JSESSIONID` |
+| `403 Forbidden` con el usuario `user` | El usuario no tiene rol `ADMIN` | Usar `admin` / `admin` para crear, modificar o eliminar |
+| `400 Bad Request` en `POST` o `PUT` | Body incorrecto: array `[ {...} ]` en lugar de un objeto, o campos que no coinciden | Enviar un único objeto JSON con los mismos nombres de campo que devuelve el `GET` |
+| `415 Unsupported Media Type` | El body no se envía como JSON | Body → raw → tipo **JSON** |
+
+Para ver qué está enviando Postman realmente, abre la consola: `View → Show Postman Console`. En una petición `POST`, `PUT` o `DELETE` debe aparecer primero la llamada a `/csrf` y después la petición con `X-CSRF-TOKEN` rellena y `Cookie: JSESSIONID=...`.
 
 ---
 
@@ -450,7 +597,14 @@ Además de la API REST, el proyecto incluye una interfaz web basada en Thymeleaf
 http://localhost:8080/web/empleados
 ```
 
-Los dos adaptadores de entrada (API REST e interfaz web) utilizan el mismo puerto de entrada, `EmpleadoService`, por lo que ambos terminan ejecutando la misma lógica de aplicación:
+Al acceder sin haber iniciado sesión, se redirige a `/login`. Tras autenticarse se accede a `/web/empleados`.
+
+La interfaz web está basada en **Thymeleaf**. Los formularios HTML tradicionales pueden incluir automáticamente el token **CSRF**.
+
+En este proyecto, las operaciones de creación, modificación y eliminación se realizan mediante `fetch()` contra la **API REST**, por lo que JavaScript obtiene previamente el token mediante `GET /csrf` y lo envía en la cabecera `X-CSRF-TOKEN`.
+
+Los dos adaptadores de entrada (**API REST** e **interfaz web**) utilizan el mismo puerto de entrada, `EmpleadoService`, por lo que ambos terminan ejecutando la misma lógica de aplicación:
+
 
 ```mermaid
 flowchart LR
@@ -495,8 +649,7 @@ El proyecto se ha construido progresivamente para incorporar diferentes concepto
 API REST → Arquitectura Hexagonal → Puerto de entrada → Servicio de aplicación
 → Puerto de salida → Adaptador de persistencia → JPA/Hibernate → H2 → PostgreSQL
 → Docker → Docker Compose → Spring Profiles → Ejecución desde Eclipse/Docker
+→ Spring Security (formulario, Basic Auth, roles y CSRF)
 ```
 
-Actualmente el proyecto permite utilizar tres escenarios de ejecución (ver [tabla de perfiles](#resumen-de-los-perfiles)).
-
-La siguiente evolución del proyecto será incorporar **Spring Security**, manteniendo la separación entre dominio, aplicación y adaptadores y estudiando dónde debe situarse la configuración de seguridad dentro de la arquitectura hexagonal.
+Actualmente el proyecto permite utilizar tres escenarios de ejecución (ver [tabla de perfiles](#resumen-de-los-perfiles)) y protege tanto la interfaz web como la API REST con Spring Security. La configuración de seguridad se ha situado en `adapters/in/security`, junto a los adaptadores de entrada, porque es una preocupación de la capa web y no del dominio ni de la lógica de aplicación.
